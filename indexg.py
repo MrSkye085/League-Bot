@@ -8,29 +8,26 @@ import os
 import datetime
 
 THEME_COLOR = discord.Color.default() 
-DATA_FILE = "leagues.json"
-WARN_FILE = "warns.json"
-RANK_FILE = "ranks.json" 
+DATA_FILE = "data.json"
+WARN_FILE = "data.json"
+RANK_FILE = "data.json" 
 
-LEAGUE_HOST_ROLE_ID = 1413192727780266054 
-STAFF_ROLE_ID = 1412240496452960308 
-ANNOUNCEMENT_CHANNEL_ID = 1425143359470702816 
-RANK_ANNOUNCEMENT_CHANNEL_ID = 1443653105303683186 
-WARN_LOG_CHANNEL_ID = 1425143357721805013 
-MOD_LOG_CHANNEL_ID = 1425143357721805013 
-HOST_STRIKE_1_ROLE_ID = 1428441303451963524 
-HOST_STRIKE_2_ROLE_ID = 1428441333139247219 
-HOST_STRIKE_3_ROLE_ID = 1428441348578476367 
+LEAGUE_HOST_ROLE_ID =  
+STAFF_ROLE_ID = 
+PING_ROLE_ID =
+ANNOUNCEMENT_CHANNEL_ID =  
+RANK_ANNOUNCEMENT_CHANNEL_ID = 
+WARN_LOG_CHANNEL_ID = 
+
+HOST_STRIKE_1_ROLE_ID = 
+HOST_STRIKE_2_ROLE_ID = 
+HOST_STRIKE_3_ROLE_ID = 
 STRIKE_ROLES = [HOST_STRIKE_1_ROLE_ID, HOST_STRIKE_2_ROLE_ID, HOST_STRIKE_3_ROLE_ID]
 
 REGION_CHOICES = ["EU", "NA", "ASIA", "SA"]
 GAMEMODE_CHOICES = ["Swift Game", "War Game"]
 MATCHTYPE_CHOICES = ["4v4", "3v3", "2v2", "1v1"]
 PERKS_CHOICES = ["Enabled", "Disabled"]
-MOD_ACTION_CHOICES = ["Kick", "Ban", "Timeout"] 
-
-snipe_data = {}
-afk_data = {}
 
 def load_data(filename):
     try:
@@ -82,36 +79,6 @@ def get_strike_role_id(count):
         return HOST_STRIKE_3_ROLE_ID
     return None
 
-async def log_action(ctx, action: str, target: discord.User | discord.Member, reason: str, details: str = None):
-    guild = ctx.guild if hasattr(ctx, 'guild') else ctx.command.cog.bot.get_guild(ctx.guild_id)
-    if not guild:
-        print("Could not retrieve guild for logging.")
-        return
-
-    log_channel = guild.get_channel(MOD_LOG_CHANNEL_ID)
-    if not log_channel:
-        return
-
-    moderator = ctx.author if hasattr(ctx, 'author') else ctx.user
-    
-    embed = discord.Embed(
-        title=f"MOD LOG: {action}",
-        color=THEME_COLOR,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
-    )
-    embed.add_field(name="User", value=f"{target.mention} ({target.id})", inline=True)
-    embed.add_field(name="Moderator", value=f"{moderator.mention} ({moderator.id})", inline=True)
-    channel_mention = ctx.channel.mention if hasattr(ctx, 'channel') and hasattr(ctx.channel, 'mention') else "N/A"
-    embed.add_field(name="Channel", value=channel_mention, inline=True)
-    embed.add_field(name="Reason", value=reason, inline=False)
-    
-    if details:
-        embed.add_field(name="Details", value=details, inline=False)
-
-    try:
-        await log_channel.send(embed=embed)
-    except Exception as e:
-        print(f"Failed to send mod log: {e}")
 
 async def get_league_info(interaction: discord.Interaction, league_id: str = None):
     data = load_league_data()
@@ -299,16 +266,11 @@ intents = discord.Intents.default()
 intents.members = True 
 intents.message_content = True 
 
-bot = commands.Bot(command_prefix="?", intents=intents)
+bot = commands.Bot(command_prefix="?", intents=intents, help_command=None, activity=discord.Game(name="/help | Dev: Skye"), status=discord.Status.idle)
 
 @bot.event
 async def on_ready():
-    activity = discord.Game(name="?help in Kada")
-    await bot.change_presence(status=discord.Status.idle, activity=activity)
-    
     await bot.tree.sync()
-    print(f"{bot.user} is online and ready with prefix '?'!")
-    
     data = load_league_data()
     for league_id, league_data in data.items():
         if 'announcement_msg_id' in league_data:
@@ -317,527 +279,11 @@ async def on_ready():
             
     print("Persistent views loaded.")
 
-@bot.event
-async def on_message_delete(message):
-    global snipe_data
-    if message.author.bot:
-        return
-    snipe_data[message.channel.id] = {
-        "content": message.content,
-        "author": message.author,
-        "time": message.created_at
-    }
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    if message.mentions:
-        for member in message.mentions:
-            if str(member.id) in afk_data:
-                afk_info = afk_data[str(member.id)]
-                afk_time = afk_info['time']
-                if afk_time.tzinfo is None:
-                    afk_time = afk_time.replace(tzinfo=datetime.timezone.utc)
-                    
-                time_diff = (datetime.datetime.now(datetime.timezone.utc) - afk_time).seconds
-                
-                if time_diff < 60:
-                    time_ago = f"{time_diff} seconds"
-                elif time_diff < 3600:
-                    time_ago = f"{time_diff // 60} minutes"
-                elif time_diff < 86400:
-                    time_ago = f"{time_diff // 3600} hours"
-                else:
-                    time_ago = f"{time_diff // 86400} days"
-                
-                embed = discord.Embed(
-                    title="AFK Alert",
-                    description=f"{member.mention} is AFK: **{afk_info['reason']}**\n(Been AFK for **{time_ago}**)",
-                    color=THEME_COLOR
-                )
-                await message.channel.send(embed=embed)
-    
-    if str(message.author.id) in afk_data:
-        afk_info = afk_data.pop(str(message.author.id))
-        
-        afk_time = afk_info['time']
-        if afk_time.tzinfo is None:
-            afk_time = afk_time.replace(tzinfo=datetime.timezone.utc)
-            
-        embed = discord.Embed(
-            title="Welcome Back!",
-            description=f"{message.author.mention}, your AFK status has been removed.",
-            color=THEME_COLOR
-        )
-        await message.channel.send(embed=embed)
-
-    await bot.process_commands(message)
-
-async def autocomplete_handler(interaction: discord.Interaction, current: str, choices_list: list) -> list[app_commands.Choice[str]]:
-    return [
-        app_commands.Choice(name=choice, value=choice)
-        for choice in choices_list if current.lower() in choice.lower()
-    ][:25] 
-    
-async def rank_role_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    choices = get_rank_role_choices()
-    return [
-        choice for choice in choices 
-        if current.lower() in choice.name.lower() or current == choice.value
-    ][:25]
-
-@bot.command(name="ban")
-@commands.has_role(STAFF_ROLE_ID)
-async def ban_user(ctx, member: discord.User, *, reason="No reason provided"):
-    if isinstance(member, discord.Member) and member.top_role >= ctx.author.top_role:
-        response = "I cannot ban this user as their highest role is equal to or higher than yours."
-    else:
-        try:
-            await ctx.guild.ban(member, reason=f"{ctx.author.name}: {reason}")
-            response = f"Successfully banned **{member}** ({member.id})."
-            await log_action(ctx, "BAN", member, reason)
-        except discord.Forbidden:
-            response = "I do not have the required permissions to ban this user."
-        except discord.HTTPException as e:
-            response = f"Failed to ban user: {e}"
-            
-    embed = discord.Embed(title="Ban Command", description=response, color=THEME_COLOR)
-    embed.add_field(name="Target", value=member.mention, inline=True)
-    embed.add_field(name="Reason", value=reason, inline=True)
-    await ctx.send(embed=embed)
-
-@bot.command(name="unban")
-@commands.has_role(STAFF_ROLE_ID)
-async def unban_user(ctx, user_id: int, *, reason="No reason provided"):
-    try:
-        user = discord.Object(id=user_id)
-        await ctx.guild.unban(user, reason=f"{ctx.author.name}: {reason}")
-        
-        unbanned_user = await bot.fetch_user(user_id)
-        
-        response = f"Successfully unbanned **{unbanned_user.name}** ({user_id})."
-        await log_action(ctx, "UNBAN", unbanned_user, reason)
-        
-        embed = discord.Embed(title="Unban Command", description=response, color=THEME_COLOR)
-        embed.add_field(name="Target ID", value=str(user_id), inline=True)
-        embed.add_field(name="Reason", value=reason, inline=True)
-        await ctx.send(embed=embed)
-
-    except discord.NotFound:
-        response = f"User ID `{user_id}` not found in the ban list."
-        embed = discord.Embed(title="Unban Failed", description=response, color=discord.Color.red())
-        embed.add_field(name="Target ID", value=str(user_id), inline=True)
-        await ctx.send(embed=embed)
-    except discord.Forbidden:
-        response = "I do not have the required permissions to unban users."
-        embed = discord.Embed(title="Unban Failed", description=response, color=discord.Color.red())
-        embed.add_field(name="Target ID", value=str(user_id), inline=True)
-        await ctx.send(embed=embed)
-    except Exception as e:
-        response = f"An error occurred: {e}"
-        embed = discord.Embed(title="Unban Failed", description=response, color=discord.Color.red())
-        embed.add_field(name="Target ID", value=str(user_id), inline=True)
-        await ctx.send(embed=embed)
-
-@bot.group(name="role", invoke_without_command=True)
-@commands.has_role(STAFF_ROLE_ID)
-async def role_group(ctx):
-    embed = discord.Embed(
-        title="Role Management",
-        description="Use `?role toggle <user> <role>` to add or remove a role.",
-        color=THEME_COLOR
-    )
-    embed.add_field(name="Usage Example", value="`?role toggle @User#1234 @RoleName`", inline=True)
-    await ctx.send(embed=embed)
-
-@role_group.command(name="toggle")
-@commands.has_role(STAFF_ROLE_ID)
-async def role_toggle(ctx, member: discord.Member, *, role: discord.Role):
-    if role >= ctx.author.top_role and ctx.author.id != ctx.guild.owner_id:
-        response = "You cannot manage roles that are equal to or higher than your highest role."
-        color = discord.Color.red()
-    elif role >= ctx.guild.me.top_role:
-        response = "I cannot manage this role as it is equal to or higher than my highest role."
-        color = discord.Color.red()
-    else:
-        try:
-            if role in member.roles:
-                await member.remove_roles(role, reason=f"Role removed by {ctx.author.name} (toggle).")
-                response = f"Removed **{role.name}** from {member.mention}."
-                action = "ROLE_REMOVE"
-                color = THEME_COLOR
-            else:
-                await member.add_roles(role, reason=f"Role added by {ctx.author.name} (toggle).")
-                response = f"Added **{role.name}** to {member.mention}."
-                action = "ROLE_ADD"
-                color = THEME_COLOR
-            
-            await log_action(ctx, action, member, f"Role: {role.name}", details=response)
-
-        except discord.Forbidden:
-            response = "I do not have permissions to manage that role."
-            color = discord.Color.red()
-        except Exception as e:
-            response = f"An error occurred: {e}"
-            color = discord.Color.red()
-
-    embed = discord.Embed(title="Role Toggle", description=response, color=color)
-    embed.add_field(name="User", value=member.mention, inline=True)
-    embed.add_field(name="Role", value=role.mention, inline=True)
-    await ctx.send(embed=embed)
-
-
-bot.command(name="mute", aliases=["timeout"])
-@commands.has_role(STAFF_ROLE_ID)
-async def mute_user(ctx, member: discord.Member, duration: str, *, reason="No reason provided"):
-    time_units = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}
-    
-    if not any(unit in duration for unit in time_units):
-        embed = discord.Embed(
-            title="Mute Failed",
-            description="Invalid duration format. Use: `<number>s/m/h/d` (e.g., `30m` for 30 minutes).",
-            color=discord.Color.red()
-        )
-        embed.add_field(name="Example", value="`?mute @User 3h Breaking rules`", inline=True)
-        return await ctx.send(embed=embed)
-
-    try:
-        unit = duration[-1].lower()
-        amount = int(duration[:-1])
-        
-        seconds = amount * time_units.get(unit, 0)
-        
-        if seconds <= 0 or seconds > 60 * 60 * 24 * 28: 
-            embed = discord.Embed(title="Mute Failed", description="Duration must be between 1 second and 28 days.", color=discord.Color.red())
-            return await ctx.send(embed=embed)
-
-        if member.top_role >= ctx.author.top_role:
-            embed = discord.Embed(title="Mute Failed", description="You cannot mute this user as their role is equal to or higher than yours.", color=discord.Color.red())
-            return await ctx.send(embed=embed)
-
-        td = datetime.timedelta(seconds=seconds)
-        await member.timeout(td, reason=f"{ctx.author.name}: {reason}")
-        
-        response = f"Successfully muted **{member.display_name}** for **{duration}**."
-        
-        await log_action(ctx, "MUTE (TIMEOUT)", member, reason, details=f"Duration: {duration}")
-        
-        embed = discord.Embed(title="Mute Command", description=response, color=THEME_COLOR)
-        embed.add_field(name="Target", value=member.mention, inline=True)
-        embed.add_field(name="Duration", value=duration, inline=True)
-        embed.add_field(name="Reason", value=reason, inline=True)
-        await ctx.send(embed=embed)
-        
-    except discord.Forbidden:
-        embed = discord.Embed(title="Mute Failed", description="I do not have the required permissions to timeout this user.", color=discord.Color.red())
-        await ctx.send(embed=embed)
-    except Exception as e:
-        embed = discord.Embed(title="Mute Failed", description=f"An error occurred: {e}", color=discord.Color.red())
-        await ctx.send(embed=embed)
-
-@bot.command(name="unmute", aliases=["untimeout"])
-@commands.has_role(STAFF_ROLE_ID)
-async def unmute_user(ctx, member: discord.Member, *, reason="No reason provided"):
-    try:
-        if member.timed_out:
-            await member.timeout(None, reason=f"{ctx.author.name}: {reason}")
-            response = f"Successfully unmuted **{member.display_name}**."
-            
-            await log_action(ctx, "UNMUTE (UNTIMEOUT)", member, reason)
-
-            embed = discord.Embed(title="Unmute Command", description=response, color=THEME_COLOR)
-            embed.add_field(name="Target", value=member.mention, inline=True)
-            embed.add_field(name="Reason", value=reason, inline=True)
-            await ctx.send(embed=embed)
-        else:
-            embed = discord.Embed(title="Unmute Failed", description=f"**{member.display_name}** is not currently muted (timed out).", color=discord.Color.red())
-            await ctx.send(embed=embed)
-
-    except discord.Forbidden:
-        embed = discord.Embed(title="Unmute Failed", description="I do not have the required permissions to remove timeout.", color=discord.Color.red())
-        await ctx.send(embed=embed)
-    except Exception as e:
-        embed = discord.Embed(title="Unmute Failed", description=f"An error occurred: {e}", color=discord.Color.red())
-        await ctx.send(embed=embed)
-
-@bot.command(name="snipe")
-@commands.has_role(STAFF_ROLE_ID)
-async def snipe(ctx):
-    if ctx.channel.id in snipe_data:
-        data = snipe_data[ctx.channel.id]
-        
-        embed = discord.Embed(
-            title="Sniped Message",
-            description=data['content'],
-            color=THEME_COLOR,
-            timestamp=data['time']
-        )
-        embed.set_author(name=data['author'].display_name, icon_url=data['author'].display_avatar.url)
-        embed.set_footer(text=f"Sniped by {ctx.author.display_name}")
-        await ctx.send(embed=embed)
-    else:
-        embed = discord.Embed(title="Snipe Failed", description="Nothing to snipe in this channel.", color=discord.Color.red())
-        await ctx.send(embed=embed)
-
-@bot.command(name="afk")
-async def afk(ctx, *, reason="No reason provided"):
-    member_id = str(ctx.author.id)
-    
-    afk_data[member_id] = {
-        "reason": reason,
-        "time": datetime.datetime.now(datetime.timezone.utc)
-    }
-    
-    embed = discord.Embed(
-        title="AFK Status Set",
-        description=f"You are now AFK. Reason: **{reason}**",
-        color=THEME_COLOR
-    )
-    embed.set_footer(text="Your AFK status will be removed when you send a message.")
-    await ctx.send(embed=embed)
-    await log_action(ctx, "AFK_SET", ctx.author, reason, details=f"Channel: {ctx.channel.name}")
-
-@bot.command(name="lock")
-@commands.has_role(STAFF_ROLE_ID)
-async def lock_channel(ctx, channel: discord.TextChannel = None, *, reason="No reason provided"):
-    channel = channel or ctx.channel
-    
-    overwrite = channel.overwrites_for(ctx.guild.default_role)
-    
-    if overwrite.send_messages is False:
-        embed = discord.Embed(title="Channel Lock Failed", description=f"{channel.mention} is already locked.", color=discord.Color.red())
-        return await ctx.send(embed=embed)
-
-    try:
-        overwrite.send_messages = False
-        await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"Channel locked by {ctx.author.name}: {reason}")
-        
-        response = f"Channel **{channel.mention}** has been locked."
-        await log_action(ctx, "CHANNEL_LOCK", ctx.author, reason, details=f"Channel: {channel.name}")
-        
-        embed = discord.Embed(title="Channel Locked", description=response, color=THEME_COLOR)
-        embed.add_field(name="Reason", value=reason, inline=True)
-        await channel.send(embed=embed) 
-        await ctx.send(embed=discord.Embed(description=f"Locked **{channel.mention}**.", color=THEME_COLOR), delete_after=5) 
-    except discord.Forbidden:
-        embed = discord.Embed(title="Channel Lock Failed", description="I do not have the required permissions to modify channel permissions.", color=discord.Color.red())
-        await ctx.send(embed=embed)
-    except Exception as e:
-        embed = discord.Embed(title="Channel Lock Failed", description=f"An error occurred: {e}", color=discord.Color.red())
-        await ctx.send(embed=embed)
-
-@bot.command(name="unlock")
-@commands.has_role(STAFF_ROLE_ID)
-async def unlock_channel(ctx, channel: discord.TextChannel = None, *, reason="No reason provided"):
-    channel = channel or ctx.channel
-    
-    overwrite = channel.overwrites_for(ctx.guild.default_role)
-    
-    if overwrite.send_messages is None or overwrite.send_messages is True:
-        embed = discord.Embed(title="Channel Unlock Failed", description=f"{channel.mention} is not currently locked.", color=discord.Color.red())
-        return await ctx.send(embed=embed)
-
-    try:
-        overwrite.send_messages = None 
-        await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"Channel unlocked by {ctx.author.name}: {reason}")
-        
-        response = f"Channel **{channel.mention}** has been unlocked."
-        await log_action(ctx, "CHANNEL_UNLOCK", ctx.author, reason, details=f"Channel: {channel.name}")
-
-        embed = discord.Embed(title="Channel Unlocked", description=response, color=THEME_COLOR)
-        embed.add_field(name="Reason", value=reason, inline=True)
-        await channel.send(embed=embed) 
-        await ctx.send(embed=discord.Embed(description=f"Unlocked **{channel.mention}**.", color=THEME_COLOR), delete_after=5) 
-    except discord.Forbidden:
-        embed = discord.Embed(title="Channel Unlock Failed", description="I do not have the required permissions to modify channel permissions.", color=discord.Color.red())
-        await ctx.send(embed=embed)
-    except Exception as e:
-        embed = discord.Embed(title="Channel Unlock Failed", description=f"An error occurred: {e}", color=discord.Color.red())
-        await ctx.send(embed=embed)
-
-@bot.tree.command(name="set-rank", description="[STAFF] Map a Discord Role to a Rank Name, Color, and Level.")
+@bot.tree.command(name="set-rank", description="Map a Discord Role to a Rank Name, Color, and Level.")
 @app_commands.describe(
     role="The Discord Role to map to a Rank.",
     rank_name="The display name of the rank (e.g., Diamond I).",
-    level="The numerical level of the rank (Higher is better, e.g., Gold=1, Diamond=5).",
-    color_hex="The hex code color for the rank embed (e.g., #00FFFF)."
-)
-async def set_rank(interaction: discord.Interaction, role: discord.Role, rank_name: str, level: int, color_hex: str):
-    await interaction.response.defer(ephemeral=True)
-    
-    if not is_staff(interaction):
-        await interaction.followup.send("Only staff can configure ranks.", ephemeral=True)
-        return
-
-    if not 0 <= level <= 100: 
-        await interaction.followup.send("Rank level must be between 0 and 100.", ephemeral=True)
-        return
-
-    if not color_hex.startswith('#') or len(color_hex) != 7:
-        await interaction.followup.send("Invalid color hex code. Please use the format #RRGGBB (e.g., #00FFFF).", ephemeral=True)
-        return
-        
-    rank_data = load_rank_data()
-    role_id_str = str(role.id)
-    
-    rank_data[role_id_str] = {
-        "name": rank_name,
-        "color": color_hex.upper(),
-        "role_name": role.name,
-        "level": level
-    }
-    
-    save_rank_data(rank_data)
-    
-    embed = discord.Embed(
-        title="Rank Configuration Saved",
-        description=f"Discord Role **{role.name}** is now mapped to the rank **{rank_name}**.",
-        color=THEME_COLOR
-    )
-    embed.add_field(name="Role ID", value=role.id, inline=True)
-    embed.add_field(name="Rank Level", value=str(level), inline=True)
-    embed.add_field(name="Rank Color (Hex)", value=color_hex.upper(), inline=True)
-    
-    await interaction.followup.send(embed=embed, ephemeral=False)
-
-@bot.tree.command(name="rank-list", description="View all configured rank mappings.")
-async def rank_list(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    
-    if not is_staff(interaction):
-        await interaction.followup.send("Only staff can view rank configurations.", ephemeral=True)
-        return
-
-    rank_data = load_rank_data()
-    
-    if not rank_data:
-        await interaction.followup.send("No ranks have been configured yet. Use /set-rank to add one.", ephemeral=True)
-        return
-        
-    embed = discord.Embed(
-        title="Configured League Ranks",
-        description="Showing all Discord Roles mapped to a League Rank (Sorted by Level):",
-        color=THEME_COLOR
-    )
-    
-    sorted_ranks = sorted(rank_data.items(), key=lambda item: item[1].get('level', 0), reverse=True)
-    
-    for role_id_str, config in sorted_ranks:
-        rank_name = config.get("name", "N/A")
-        role_name = config.get("role_name", f"Unknown Role ({role_id_str})")
-        color_hex = config.get("color", "#808080")
-        level = config.get("level", 0)
-        
-        embed.add_field(
-            name=f"Rank: {rank_name} (Lvl {level})", 
-            value=f"Role: **{role_name}**\nColor: `{color_hex}`",
-            inline=True
-        )
-        
-    await interaction.followup.send(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="host-league", description="Host a new league")
-@app_commands.describe(
-    region="Region (e.g., EU, NA)", 
-    game_mode="Game Mode (Swift or War Game(s)", 
-    match_type="Match Type (e.g., 4v4, 3v3)", 
-    perks="Perks (e.g., Enabled, Disabled)",
-    min_rank="Select the minimum rank required to join. 'None' means open to all.",
-    private_link="Private Server Link"
-)
-@app_commands.autocomplete(min_rank=rank_role_autocomplete)
-async def host_league(interaction: discord.Interaction, region: str, game_mode: str, match_type: str, perks: str, min_rank: str, private_link: str = None):
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    if not is_league_host(interaction):
-        await interaction.followup.send("You do not have permission to host a league.", ephemeral=True)
-        return
-
-    league_id = generate_league_id()
-    required_rank_id = min_rank if min_rank != "None" else None
-    
-    try:
-        team_size = int(match_type.split('v')[0])
-        players_required = team_size * 2
-    except (IndexError, ValueError):
-        players_required = 0 
-        
-    data = load_league_data()
-    
-    rank_data = load_rank_data()
-    
-    if required_rank_id:
-        announcement_channel = bot.get_channel(RANK_ANNOUNCEMENT_CHANNEL_ID)
-        required_rank_name = rank_data.get(required_rank_id, {}).get('name', 'UNKNOWN RANK')
-        
-        if required_rank_name == 'UNKNOWN RANK':
-            await interaction.followup.send("Error: The selected rank is not configured. Please use /set-rank to configure it first.", ephemeral=True)
-            return
-
-        league_type_label = f"Rank Restricted (Min: {required_rank_name})"
-        rank_info = f"\n\n**Restriction:** Players must have a rank of **{required_rank_name}** or higher to join."
-        ping = "<@&1412226143825690795>"
-    else:
-        announcement_channel = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
-        league_type_label = "Standard (Open)"
-        rank_info = ""
-        ping = "<@&1412226143825690795>"
-
-    if not announcement_channel:
-        await interaction.followup.send(f"Error: Could not find the announcement channel. Check configuration for {'Rank Restricted' if required_rank_id else 'Standard'} channel ID.", ephemeral=True)
-        return
-
-    announcement_embed = discord.Embed(
-        title=f"Kada {league_type_label} League Hosted",
-        description=f"Host: {interaction.user.mention}\nRegion: **{region}**\n\nThis is **{game_mode}** with **{perks}** perks. We need **{players_required}** players!{rank_info}\n\n**Join by clicking the button below!**",
-        color=THEME_COLOR
-    )
-    announcement_embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else discord.Embed.Empty)
-    announcement_embed.set_footer(text=f"Match Type: {match_type} | ID: {league_id}") 
-    
-    join_view = JoinButtonView(league_id, required_rank_id)
-    try:
-        announcement_msg = await announcement_channel.send(ping, embed=announcement_embed, view=join_view)
-    except discord.Forbidden:
-        await interaction.followup.send(f"Error: The bot does not have permission to send messages in {announcement_channel.mention}.", ephemeral=True)
-        return
-    except Exception as e:
-        await interaction.followup.send(f"An unexpected error occurred while sending the announcement: {e}", ephemeral=True)
-        return
-
-    thread = await interaction.channel.create_thread(name=f"{interaction.user.name}'s League", type=discord.ChannelType.private_thread)
-    
-    thread_embed = discord.Embed(
-        title=f"{interaction.user.name}'s League",
-        description="Only the host and joined members should see this thread.",
-        color=THEME_COLOR
-    )
-    thread_embed.add_field(name="Match Type", value=match_type, inline=False)
-    thread_embed.add_field(name="Game Mode", value=game_mode, inline=False)
-    thread_embed.add_field(name="Perks", value=perks, inline=False)
-    thread_embed.add_field(name="Min Rank Required", value=required_rank_id if required_rank_id else "None", inline=False)
-    thread_embed.add_field(name="ID", value=league_id, inline=False)
-    thread_embed.add_field(name="Host", value=interaction.user.mention, inline=False)
-    if private_link:
-        thread_embed.add_field(name="Private Server Link", value=private_link, inline=False)
-    
-    thread_msg = await thread.send(embed=thread_embed)
-    await thread.send(f"{interaction.user.mention} (Host), use /add-member to add players.")
-
-    await send_join_notification(thread, interaction.user, league_id, is_host_add=True)
-
-    league_data = {
-        "id": league_id,
-        "region": region,
-        "game_mode": game_mode,
-        "match_type": match_type,
-        "perks": perks,
-        "host": interaction.user.id,
-        "players": [interaction.user.id], 
-        "private_link": private_link,
-        "announcement_msg_id": announcement_msg.id, 
+    level="The numerical level of the rank (Higher is better, e.g., Gold=uncement_msg_id": announcement_msg.id, 
         "announcement_channel_id": announcement_channel.id,
         "thread_id": thread.id,
         "thread_msg_id": thread_msg.id,
@@ -1265,94 +711,6 @@ async def warn_user(interaction: discord.Interaction, target: discord.Member, re
         ephemeral=False
     )
 
-@bot.tree.command(name="moderate", description="[STAFF] Apply a moderation action to a user.")
-@app_commands.describe(
-    member="The member to moderate.",
-    action="The moderation action to take (Kick, Ban, or Timeout).",
-    reason="The reason for the moderation action.",
-    duration_minutes="Duration for timeout in minutes (Only for Timeout action)."
-)
-async def moderate(interaction: discord.Interaction, member: discord.Member, action: str, reason: str, duration_minutes: int = None):
-    await interaction.response.defer(ephemeral=True)
-
-    if not is_staff(interaction):
-        await interaction.followup.send("You must be staff to use moderation commands.", ephemeral=True)
-        return
-    
-    if member == interaction.user:
-        await interaction.followup.send("You cannot moderate yourself.", ephemeral=True)
-        return
-
-    if member.top_role >= interaction.user.top_role:
-        await interaction.followup.send("You cannot moderate a user with an equal or higher role than you.", ephemeral=True)
-        return
-        
-    action_successful = False
-    action_detail = ""
-
-    try:
-        if action == "Kick":
-            await member.kick(reason=f"Moderated by {interaction.user.name}: {reason}")
-            action_successful = True
-            action_detail = f"Kicked from the server."
-            
-        elif action == "Ban":
-            await member.ban(reason=f"Moderated by {interaction.user.name}: {reason}")
-            action_successful = True
-            action_detail = f"Banned from the server."
-            
-        elif action == "Timeout":
-            if duration_minutes is None or duration_minutes <= 0:
-                await interaction.followup.send("A valid duration (in minutes) is required for a Timeout.", ephemeral=True)
-                return
-            
-            duration = datetime.timedelta(minutes=duration_minutes)
-            if duration > datetime.timedelta(days=28):
-                await interaction.followup.send("Timeout duration cannot exceed 28 days.", ephemeral=True)
-                return
-                
-            await member.timeout(duration, reason=f"Moderated by {interaction.user.name}: {reason}")
-            action_successful = True
-            action_detail = f"Timed out for {duration_minutes} minutes."
-            
-        else:
-            await interaction.followup.send("Invalid moderation action selected.", ephemeral=True)
-            return
-
-    except discord.Forbidden:
-        await interaction.followup.send(f"I do not have permissions to perform the **{action}** action on **{member.display_name}**.", ephemeral=True)
-        return
-    except Exception as e:
-        await interaction.followup.send(f"An unexpected error occurred: `{e}`", ephemeral=True)
-        return
-        
-    if action_successful:
-        embed = discord.Embed(
-            title=f"Moderation Action: {action}",
-            description=f"Action **{action_detail}** applied to {member.mention}.",
-            color=discord.Color.red()
-        )
-        embed.add_field(name="Reason", value=reason, inline=False)
-        embed.set_footer(text=f"Moderator: {interaction.user.display_name}")
-
-        try:
-            await log_action(
-                ctx=interaction, 
-                action=action.upper(), 
-                target=member, 
-                reason=reason, 
-                details=action_detail
-            )
-        except Exception:
-            pass 
-                
-        await interaction.followup.send(embed=embed, ephemeral=False)
-
-@moderate.autocomplete('action')
-async def moderate_action_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    return await autocomplete_handler(interaction, current, MOD_ACTION_CHOICES)
-
-
 @bot.tree.command(name="help", description="Show all commands")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -1369,17 +727,9 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="/end-league", value="End a league, disable the join button, and delete the thread.", inline=False)
     embed.add_field(name="/warn", value="Issue a Host Strike to a user (Host Strike system only. Staff only).", inline=False)
     embed.add_field(name="/moderate", value="[STAFF] Apply a moderation action (Kick, Ban, Timeout) to a user.", inline=False)
-    embed.add_field(name="/set-rank", value="[STAFF] Map a Discord role to a specific Rank Name, Color, and **Level** (for hierarchy checks).", inline=False)
-    embed.add_field(name="/rank-list", value="[STAFF] View all configured rank mappings and their levels.", inline=False)
-    embed.add_field(name="--- Prefix Commands (?) ---", value=" ", inline=False)
-    embed.add_field(name="?ban/?unban", value="Ban/Unban a user (ID for unban).", inline=True)
-    embed.add_field(name="?role toggle", value="Add or remove a role from a user.", inline=True)
-    embed.add_field(name="?mute/?unmute", value="Timeout/Remove timeout from a user.", inline=True)
-    embed.add_field(name="?lock/?unlock", value="Lock/Unlock the current channel.", inline=True)
-    embed.add_field(name="?snipe", value="View the last deleted message.", inline=True)
-    embed.add_field(name="?afk", value="Set your status to AFK.", inline=True)
-
+    embed.add_field(name="/set-rank", value="Map a Discord role to a specific Rank Name, Color, and **Level** (for hierarchy checks).", inline=False)
+    embed.add_field(name="/rank-list", value="View all configured rank roles and their levels.", inline=False)
+   
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-
-bot.run("MTQ0MTI3ODg4MzkzOTc0NTkzMg.GLsMeC.A9QBzayGvTWIiSwMrRgyt4VmxomAdFD0JbXS9M")
+bot.run("")
